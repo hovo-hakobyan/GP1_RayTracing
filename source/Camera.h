@@ -38,7 +38,7 @@ namespace dae
 			assert(false && "Not Implemented Yet");
 			return {};
 		}
-
+		
 		void Update(Timer* pTimer)
 		{
 			const float deltaTime = pTimer->GetElapsed();

@@ -28,8 +28,82 @@ namespace dae {
 
 	void dae::Scene::GetClosestHit(const Ray& ray, HitRecord& closestHit) const
 	{
-		//todo W1
-		assert(false && "No Implemented Yet!");
+		
+		float finalT{0.0f};
+		bool isTSet{false};
+
+		for (size_t i = 0; i < m_SphereGeometries.size(); i++)
+		{
+			//Vector from  ray origin to sphere origin
+			Vector3 raySphere{ m_SphereGeometries[i].origin - ray.origin};
+
+			// projection of tc on the ray
+			Vector3 projectionOnRay{ ray.direction * Vector3::Dot(ray.direction,raySphere) };
+
+			float raySphereMagnitude{ raySphere.Magnitude() };
+			float projectionOnRayMagnitude{ projectionOnRay.Magnitude() };
+
+			//Perpendicular distance from the center of the sphere to the ray
+			float perpDistanceRaySphere{ sqrtf(raySphereMagnitude * raySphereMagnitude - projectionOnRayMagnitude * projectionOnRayMagnitude) };
+			float sphereRadius{ m_SphereGeometries[i].radius};
+			if (perpDistanceRaySphere > sphereRadius)
+			{
+				continue;
+			}
+
+			// distance FROM the point that is perpendicular to the sphere center and is on the ray TO the first intersection point
+			float insideSphereSegment{ sqrtf(sphereRadius * sphereRadius - perpDistanceRaySphere * perpDistanceRaySphere) };
+			float currentT{ projectionOnRayMagnitude - insideSphereSegment };
+
+			if (!isTSet)
+			{
+				finalT = currentT;
+				isTSet = true;
+				closestHit.materialIndex = m_SphereGeometries[i].materialIndex;
+			}
+			else
+			{
+				if (currentT < finalT)
+				{
+					finalT = currentT;
+					closestHit.materialIndex = m_SphereGeometries[i].materialIndex;
+				}
+			}
+			closestHit.didHit = true;
+			
+		}
+
+		for (size_t i = 0; i < m_PlaneGeometries.size(); i++)
+		{
+			Vector3 OPlane{ m_PlaneGeometries[i].origin};
+			Vector3 ORay{ ray.origin };
+			Vector3 PlaneNormal{ m_PlaneGeometries[i].normal };
+			Vector3 RayDir{ ray.direction };
+
+			float currentT{ Vector3::Dot(OPlane - ORay,PlaneNormal) / Vector3::Dot(RayDir,PlaneNormal) };
+			if (currentT < ray.min)
+			{
+				continue;
+			}
+
+			if (!isTSet)
+			{
+				finalT = currentT;
+				isTSet = true;
+				closestHit.materialIndex = m_PlaneGeometries[i].materialIndex;
+			}
+			else
+			{
+				if (currentT < finalT)
+				{
+					finalT = currentT;
+					closestHit.materialIndex = m_PlaneGeometries[i].materialIndex;
+				}
+			}
+			closestHit.didHit = true;
+
+		}
+		closestHit.t = finalT;
 	}
 
 	bool Scene::DoesHit(const Ray& ray) const

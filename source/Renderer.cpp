@@ -9,7 +9,6 @@
 #include "Material.h"
 #include "Scene.h"
 #include "Utils.h"
-
 using namespace dae;
 
 Renderer::Renderer(SDL_Window * pWindow) :
@@ -26,16 +25,34 @@ void Renderer::Render(Scene* pScene) const
 	Camera& camera = pScene->GetCamera();
 	auto& materials = pScene->GetMaterials();
 	auto& lights = pScene->GetLights();
+	float aspectRatio{ static_cast<float>(m_Width) / m_Height };
 
 	for (int px{}; px < m_Width; ++px)
 	{
+		float cx{static_cast<float>( (2 * (px + 0.5) - m_Width) / m_Width) };
+		cx *= aspectRatio;
+
 		for (int py{}; py < m_Height; ++py)
 		{
-			float gradient = px / static_cast<float>(m_Width);
-			gradient += py / static_cast<float>(m_Width);
-			gradient /= 2.0f;
+			float cy{ static_cast<float>( (m_Height - 2 * (py + 0.5)) / m_Height )};
+			Vector3 rayDir{ cx * Vector3::UnitX + cy * Vector3::UnitY + Vector3::UnitZ };
+			rayDir.Normalize();
 
-			ColorRGB finalColor{ gradient, gradient, gradient };
+			Ray viewRay{ {0,0,0},rayDir };
+			ColorRGB finalColor{};
+			HitRecord closestHit{};
+
+			pScene->GetClosestHit(viewRay, closestHit);
+			
+			if (closestHit.didHit)
+			{
+				//const float scaled_t{ (closestHit.t - 50.0f) / 40.0f };
+				//const float scaled_t{ closestHit.t / 500.0f };
+				finalColor = materials[closestHit.materialIndex]->Shade();
+				//finalColor = { scaled_t,scaled_t,scaled_t };
+				
+				
+			}
 
 			//Update Color in Buffer
 			finalColor.MaxToOne();
@@ -46,7 +63,7 @@ void Renderer::Render(Scene* pScene) const
 				static_cast<uint8_t>(finalColor.b * 255));
 		}
 	}
-
+	
 	//@END
 	//Update SDL Surface
 	SDL_UpdateWindowSurface(m_pWindow);
