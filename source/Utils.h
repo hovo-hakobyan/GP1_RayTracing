@@ -13,35 +13,35 @@ namespace dae
 		//SPHERE HIT-TESTS
 		inline bool HitTest_Sphere(const Sphere& sphere, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
-			////Vector from  ray origin to sphere origin
-			//Vector3 raySphere{ sphere.origin - ray.origin };
+			//Vector from  ray origin to sphere origin
+			Vector3 raySphere{ sphere.origin - ray.origin };
 
-			//Vector3 rayNormalized{ ray.direction.Normalized() };
+			Vector3 rayNormalized{ ray.direction.Normalized() };
 
-			//// projection of tc on the ray
-			//Vector3 projectionOnRay{ rayNormalized * Vector3::Dot(rayNormalized,raySphere) };
+			// projection of tc on the ray
+			Vector3 projectionOnRay{ rayNormalized * Vector3::Dot(rayNormalized,raySphere) };
 
-			//float raySphereMagnitude{ raySphere.Magnitude() };
-			//float projectionOnRayMagnitude{ projectionOnRay.Magnitude() };
+			float raySphereMagnitude{ raySphere.Magnitude() };
+			float projectionOnRayMagnitude{ projectionOnRay.Magnitude() };
 
-			////Perpendicular distance from the center of the sphere to the ray
-			//float perpDistanceRaySphere{ sqrtf(raySphereMagnitude * raySphereMagnitude - projectionOnRayMagnitude * projectionOnRayMagnitude) };
-			//float sphereRadius{ sphere.radius };
-			//if (perpDistanceRaySphere > sphereRadius)
-			//{
-			//	hitRecord.didHit = false;
-			//	return false;
-			//}
-			//
-			//// distance FROM the point that is perpendicular to the sphere center and is on the ray TO the first intersection point
-			//float insideSphereSegment{ sqrtf(sphereRadius * sphereRadius - perpDistanceRaySphere * perpDistanceRaySphere) };
-			//float t{ projectionOnRayMagnitude - insideSphereSegment };
-
-			//hitRecord.origin = Vector3{ rayNormalized};
-			//hitRecord.t = t;
-			//hitRecord.didHit = true;
-
-			//return true;
+			//Perpendicular distance from the center of the sphere to the ray
+			float perpDistanceRaySphere{ sqrtf(raySphereMagnitude * raySphereMagnitude - projectionOnRayMagnitude * projectionOnRayMagnitude) };
+			float sphereRadius{ sphere.radius };
+			if (perpDistanceRaySphere > sphereRadius)
+			{
+				return false;
+			}
+			
+			// distance FROM the point that is perpendicular to the sphere center and is on the ray TO the first intersection point
+			float insideSphereSegment{ sqrtf(sphereRadius * sphereRadius - perpDistanceRaySphere * perpDistanceRaySphere) };
+			float t{ projectionOnRayMagnitude - insideSphereSegment };
+			if (t < hitRecord.t)
+			{
+				hitRecord.t = t;
+				hitRecord.materialIndex = sphere.materialIndex;
+			}
+			hitRecord.didHit = true;
+			return true;
 		}
 
 		inline bool HitTest_Sphere(const Sphere& sphere, const Ray& ray)
@@ -54,21 +54,19 @@ namespace dae
 		//PLANE HIT-TESTS
 		inline bool HitTest_Plane(const Plane& plane, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
-			/*Vector3 OPlane{ plane.origin };
+			Vector3 OPlane{ plane.origin };
 			Vector3 ORay{ ray.origin };
 			Vector3 PlaneNormal{ plane.normal };
 			Vector3 RayDir{ ray.direction };
 			
 			float t{ Vector3::Dot(OPlane - ORay,PlaneNormal) / Vector3::Dot(RayDir,PlaneNormal) };
-			if (t > ray.min )
+			if (t > ray.min && t < hitRecord.t)
 			{
-				
-				Vector3 point{ ORay + t * RayDir };
-				hitRecord.t = t;
+				hitRecord.t = t;	
 				hitRecord.didHit = true;
+				hitRecord.materialIndex = plane.materialIndex;
 				return true;
-			}*/
-
+			}
 			return false;
 		}
 
