@@ -35,12 +35,16 @@ namespace dae
 			// distance FROM the point that is perpendicular to the sphere center and is on the ray TO the first intersection point
 			float insideSphereSegment{ sqrtf(sphereRadius * sphereRadius - perpDistanceRaySphere * perpDistanceRaySphere) };
 			float t{ projectionOnRayMagnitude - insideSphereSegment };
-			if (t < hitRecord.t)
+
+			if (t > ray.min && t < ray.max)
 			{
-				hitRecord.t = t;
-				hitRecord.materialIndex = sphere.materialIndex;
+				if (t < hitRecord.t)
+				{
+					hitRecord.t = t;
+					hitRecord.materialIndex = sphere.materialIndex;
+				}
+				hitRecord.didHit = true;
 			}
-			hitRecord.didHit = true;
 			return true;
 		}
 
@@ -60,12 +64,14 @@ namespace dae
 			Vector3 RayDir{ ray.direction };
 			
 			float t{ Vector3::Dot(OPlane - ORay,PlaneNormal) / Vector3::Dot(RayDir,PlaneNormal) };
-			if (t > ray.min && t < hitRecord.t)
+
+			if (t > ray.min && t < ray.max && t < hitRecord.t)
 			{
-				hitRecord.t = t;	
+				hitRecord.t = t;
 				hitRecord.didHit = true;
 				hitRecord.materialIndex = plane.materialIndex;
 				return true;
+
 			}
 			return false;
 		}
