@@ -25,7 +25,8 @@ namespace dae
 			float projectionOnRayMagnitude{ projectionOnRay.Magnitude() };
 
 			//Perpendicular distance from the center of the sphere to the ray
-			float perpDistanceRaySphere{ sqrtf(raySphereMagnitude * raySphereMagnitude - projectionOnRayMagnitude * projectionOnRayMagnitude) };
+			float perpDistanceRaySphere{ sqrtf( raySphereMagnitude * raySphereMagnitude - projectionOnRayMagnitude * projectionOnRayMagnitude) };
+			
 			float sphereRadius{ sphere.radius };
 			if (perpDistanceRaySphere > sphereRadius)
 			{

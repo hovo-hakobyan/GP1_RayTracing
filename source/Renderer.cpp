@@ -26,19 +26,25 @@ void Renderer::Render(Scene* pScene) const
 	auto& materials = pScene->GetMaterials();
 	auto& lights = pScene->GetLights();
 	float aspectRatio{ static_cast<float>(m_Width) / m_Height };
+	float fovRadians{tanf( TO_RADIANS * camera.fovAngle /2) };
+	
 
 	for (int px{}; px < m_Width; ++px)
 	{
 		float cx{static_cast<float>( (2 * (px + 0.5) - m_Width) / m_Width) };
-		cx *= aspectRatio;
+		cx *= aspectRatio * fovRadians;
 
 		for (int py{}; py < m_Height; ++py)
 		{
 			float cy{ static_cast<float>( (m_Height - 2 * (py + 0.5)) / m_Height )};
+			cy *= fovRadians;
+
 			Vector3 rayDir{ cx * Vector3::UnitX + cy * Vector3::UnitY + Vector3::UnitZ };
+			//we shoot rays from the camera positioin, not from the world origin
+			rayDir = camera.cameraToWorld.TransformVector(rayDir);
 			rayDir.Normalize();
 
-			Ray viewRay{ {0,0,0},rayDir };
+			Ray viewRay{ camera.origin,rayDir};
 			ColorRGB finalColor{};
 			HitRecord closestHit{};
 
