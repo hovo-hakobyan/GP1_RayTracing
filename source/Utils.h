@@ -15,17 +15,18 @@ namespace dae
 		{
 			//Vector from  ray origin to sphere origin
 			Vector3 raySphere{ sphere.origin - ray.origin };
-
 			Vector3 rayNormalized{ ray.direction.Normalized() };
 
+			float raySphereOnRay{ Vector3::Dot(rayNormalized, raySphere) };
+			if ( raySphereOnRay< 0)
+			{
+				return false;
+			}
 			// projection of tc on the ray
-			Vector3 projectionOnRay{ rayNormalized * Vector3::Dot(rayNormalized,raySphere) };
-
-			float raySphereMagnitude{ raySphere.Magnitude() };
-			float projectionOnRayMagnitude{ projectionOnRay.Magnitude() };
+			Vector3 projectionOnRay{ rayNormalized * raySphereOnRay };
 
 			//Perpendicular distance from the center of the sphere to the ray
-			float perpDistanceRaySphere{ sqrtf( raySphereMagnitude * raySphereMagnitude - projectionOnRayMagnitude * projectionOnRayMagnitude) };
+			float perpDistanceRaySphere{sqrtf( Vector3::Dot(raySphere,raySphere) - Vector3::Dot(projectionOnRay,projectionOnRay))};
 			
 			float sphereRadius{ sphere.radius };
 			if (perpDistanceRaySphere > sphereRadius)
@@ -33,18 +34,28 @@ namespace dae
 				return false;
 			}
 			
+			
 			// distance FROM the point that is perpendicular to the sphere center and is on the ray TO the first intersection point
 			float insideSphereSegment{ sqrtf(sphereRadius * sphereRadius - perpDistanceRaySphere * perpDistanceRaySphere) };
-			float t{ projectionOnRayMagnitude - insideSphereSegment };
+			float t{ projectionOnRay.Magnitude() - insideSphereSegment };
 
-			if (t > ray.min && t < ray.max)
+
+			if (t >= ray.min && t <= ray.max)
 			{
+				if (ignoreHitRecord)
+				{
+					return true;
+				}
 				if (t < hitRecord.t)
 				{
 					hitRecord.t = t;
 					hitRecord.materialIndex = sphere.materialIndex;
+					hitRecord.didHit = true;
+					hitRecord.origin = ray.origin + ray.direction * hitRecord.t;
+					hitRecord.normal = hitRecord.origin - sphere.origin;
+					hitRecord.normal.Normalize();
 				}
-				hitRecord.didHit = true;
+				
 			}
 			return true;
 		}
@@ -59,19 +70,28 @@ namespace dae
 		//PLANE HIT-TESTS
 		inline bool HitTest_Plane(const Plane& plane, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
-			Vector3 OPlane{ plane.origin };
-			Vector3 ORay{ ray.origin };
-			Vector3 PlaneNormal{ plane.normal };
-			Vector3 RayDir{ ray.direction };
-			
-			float t{ Vector3::Dot(OPlane - ORay,PlaneNormal) / Vector3::Dot(RayDir,PlaneNormal) };
+			Vector3 planeNormal{ plane.normal };
 
-			if (t > ray.min && t < ray.max && t < hitRecord.t)
+			float t{ Vector3::Dot(plane.origin - ray.origin,planeNormal) / Vector3::Dot(ray.direction,planeNormal) };
+		
+
+			if (t > ray.min && t < ray.max )
 			{
-				hitRecord.t = t;
-				hitRecord.didHit = true;
-				hitRecord.materialIndex = plane.materialIndex;
-				return true;
+				if (ignoreHitRecord)
+				{
+					return true;
+				}
+				if (t < hitRecord.t)
+				{
+					hitRecord.t = t;
+					hitRecord.didHit = true;
+					hitRecord.materialIndex = plane.materialIndex;
+					hitRecord.origin = ray.origin + ray.direction* hitRecord.t;
+					hitRecord.normal = plane.origin - hitRecord.origin;
+					hitRecord.normal.Normalize();
+					return true;
+				}
+				
 
 			}
 			return false;
@@ -119,9 +139,7 @@ namespace dae
 		//Direction from target to light
 		inline Vector3 GetDirectionToLight(const Light& light, const Vector3 origin)
 		{
-			//todo W3
-			assert(false && "No Implemented Yet!");
-			return {};
+			return Vector3{light.origin - origin};
 		}
 
 		inline ColorRGB GetRadiance(const Light& light, const Vector3& target)

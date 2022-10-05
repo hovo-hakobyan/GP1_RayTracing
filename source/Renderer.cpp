@@ -26,18 +26,16 @@ void Renderer::Render(Scene* pScene) const
 	auto& materials = pScene->GetMaterials();
 	auto& lights = pScene->GetLights();
 	float aspectRatio{ static_cast<float>(m_Width) / m_Height };
-	float fovRadians{tanf( TO_RADIANS * camera.fovAngle /2) };
+	float fovRadians{tanf( TO_RADIANS * (camera.fovAngle /2)) };
 	
 
 	for (int px{}; px < m_Width; ++px)
 	{
-		float cx{static_cast<float>( (2 * (px + 0.5) - m_Width) / m_Width) };
-		cx *= aspectRatio * fovRadians;
+		float cx{static_cast<float>( (2 * (px + 0.5) - m_Width) / m_Width) * aspectRatio * fovRadians };
 
 		for (int py{}; py < m_Height; ++py)
 		{
-			float cy{ static_cast<float>( (m_Height - 2 * (py + 0.5)) / m_Height )};
-			cy *= fovRadians;
+			float cy{ static_cast<float>( (m_Height - 2 * (py + 0.5)) / m_Height ) * fovRadians};
 
 			Vector3 rayDir{ cx * Vector3::UnitX + cy * Vector3::UnitY + Vector3::UnitZ };
 			//we shoot rays from the camera positioin, not from the world origin
@@ -52,12 +50,21 @@ void Renderer::Render(Scene* pScene) const
 			
 			if (closestHit.didHit)
 			{
-				//const float scaled_t{ (closestHit.t - 50.0f) / 40.0f };
-				//const float scaled_t{ closestHit.t / 500.0f };
 				finalColor = materials[closestHit.materialIndex]->Shade();
-				//finalColor = { scaled_t,scaled_t,scaled_t };
-				
-				
+				float offset{ 0.0001f };
+				Ray lightRay{};
+				lightRay.origin = closestHit.origin + closestHit.normal * (offset *2);
+				for (const Light& currentLight: lights)
+				{
+					Vector3 dirToLight{ LightUtils::GetDirectionToLight(currentLight,lightRay.origin) };
+					lightRay.direction = dirToLight.Normalized();
+					lightRay.min = offset;
+					lightRay.max = dirToLight.Magnitude();
+					if (pScene->DoesHit(lightRay))
+					{
+						finalColor *= 0.5f;
+					}
+				}
 			}
 
 			//Update Color in Buffer

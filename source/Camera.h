@@ -35,6 +35,7 @@ namespace dae
 		Matrix CalculateCameraToWorld()
 		{
 			Matrix rot{ Matrix::CreateRotation(Vector3(totalPitch, totalYaw,0)) };
+			//Calculates the current forward vector by applying the rotation to it
 			forward = rot.TransformVector(Vector3::UnitZ);
 			forward.Normalize();
 			right = Vector3::Cross(Vector3::UnitY, forward);
@@ -42,6 +43,7 @@ namespace dae
 			up = Vector3::Cross(forward, right);
 			up.Normalize();
 		
+
 			return {right,up,forward,origin};
 		}
 		
@@ -50,7 +52,8 @@ namespace dae
 			const float deltaTime = pTimer->GetElapsed();
 			const float moveSpeed{ 10.f };
 			const float rotSpeed{ 4.f };
-			
+			bool hasRotated{};
+
 			//Keyboard Input
 			const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);
 
@@ -110,12 +113,13 @@ namespace dae
 				if (mouseX < 0)
 				{
 					totalYaw -= rotSpeed * deltaTime;
+					hasRotated = true;
 					
 				}
 				if (mouseX > 0)
 				{
 					totalYaw += rotSpeed * deltaTime;
-					
+					hasRotated = true;
 				}
 			}
 			else if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT))
@@ -123,22 +127,28 @@ namespace dae
 				if (mouseX < 0)
 				{
 					totalYaw -= rotSpeed * deltaTime;
+					hasRotated = true;
 				}
 				if (mouseX > 0)
 				{
 					totalYaw += rotSpeed * deltaTime;
+					hasRotated = true;
 				}
 				if (mouseY > 0)
 				{
 					totalPitch -= rotSpeed * deltaTime;
+					hasRotated = true;
 				}
 				if (mouseY < 0)
 				{
 					totalPitch += rotSpeed * deltaTime;
+					hasRotated = true;
 				}
 			}
 
-			cameraToWorld = CalculateCameraToWorld();
+			if (hasRotated)
+				cameraToWorld = CalculateCameraToWorld();
+			
 		}
 	};
 }
