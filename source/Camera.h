@@ -42,8 +42,7 @@ namespace dae
 			right.Normalize();
 			up = Vector3::Cross(forward, right);
 			up.Normalize();
-		
-
+			
 			return {right,up,forward,origin};
 		}
 		
@@ -52,26 +51,25 @@ namespace dae
 			const float deltaTime = pTimer->GetElapsed();
 			const float moveSpeed{ 10.f };
 			const float rotSpeed{ 4.f };
-			bool hasRotated{};
 
 			//Keyboard Input
 			const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);
 
 			if (pKeyboardState[SDL_SCANCODE_W])
 			{
-				origin.z += moveSpeed * deltaTime;
+				origin += forward* moveSpeed * deltaTime;
 			}
 			if (pKeyboardState[SDL_SCANCODE_S])
 			{
-				origin.z -= moveSpeed * deltaTime;
+				origin -= forward * moveSpeed * deltaTime;
 			}
 			if (pKeyboardState[SDL_SCANCODE_A])
 			{
-				origin.x -= moveSpeed * deltaTime;
+				origin -= right * moveSpeed * deltaTime;
 			}
 			if (pKeyboardState[SDL_SCANCODE_D])
 			{
-				origin.x += moveSpeed * deltaTime;
+				origin += right * moveSpeed * deltaTime;
 			}
 
 
@@ -85,41 +83,39 @@ namespace dae
 			{
 				if (mouseY > 0)
 				{
-					origin.y -= moveSpeed * deltaTime;
+					origin -= up * moveSpeed * deltaTime;
 				}
 				if (mouseY < 0)
 				{
-					origin.y += moveSpeed * deltaTime;
+					origin += up * moveSpeed * deltaTime;
 				}
 				if (mouseX > 0)
 				{
-					origin.x += moveSpeed * deltaTime;
+					origin +=right * moveSpeed * deltaTime;
 				}
 				if (mouseX < 0)
 				{
-					origin.x -= moveSpeed * deltaTime;
+					origin -= right * moveSpeed * deltaTime;
 				}
+
 			}
 			else if (mouseState & SDL_BUTTON(SDL_BUTTON_LEFT))
 			{
 				if (mouseY > 0)
 				{
-					origin.z -= moveSpeed * deltaTime;
+					origin -=forward * moveSpeed * deltaTime;
 				}
 				if (mouseY < 0)
 				{
-					origin.z += moveSpeed * deltaTime;
+					origin += forward* moveSpeed * deltaTime;
 				}
 				if (mouseX < 0)
 				{
-					totalYaw -= rotSpeed * deltaTime;
-					hasRotated = true;
-					
+					totalYaw -= rotSpeed * deltaTime;	
 				}
 				if (mouseX > 0)
 				{
 					totalYaw += rotSpeed * deltaTime;
-					hasRotated = true;
 				}
 			}
 			else if (mouseState & SDL_BUTTON(SDL_BUTTON_RIGHT))
@@ -127,27 +123,27 @@ namespace dae
 				if (mouseX < 0)
 				{
 					totalYaw -= rotSpeed * deltaTime;
-					hasRotated = true;
+				
 				}
 				if (mouseX > 0)
 				{
 					totalYaw += rotSpeed * deltaTime;
-					hasRotated = true;
+				
 				}
 				if (mouseY > 0)
 				{
 					totalPitch -= rotSpeed * deltaTime;
-					hasRotated = true;
+					
 				}
 				if (mouseY < 0)
 				{
 					totalPitch += rotSpeed * deltaTime;
-					hasRotated = true;
+					
 				}
 			}
 
-			if (hasRotated)
-				cameraToWorld = CalculateCameraToWorld();
+		
+			cameraToWorld = CalculateCameraToWorld();
 			
 		}
 	};

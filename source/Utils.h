@@ -13,7 +13,7 @@ namespace dae
 		//SPHERE HIT-TESTS
 		inline bool HitTest_Sphere(const Sphere& sphere, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
-			//Vector from  ray origin to sphere origin
+		
 			Vector3 raySphere{ sphere.origin - ray.origin };
 			Vector3 rayNormalized{ ray.direction.Normalized() };
 
@@ -33,8 +33,6 @@ namespace dae
 			{
 				return false;
 			}
-			
-			
 			// distance FROM the point that is perpendicular to the sphere center and is on the ray TO the first intersection point
 			float insideSphereSegment{ sqrtf(sphereRadius * sphereRadius - perpDistanceRaySphere * perpDistanceRaySphere) };
 			float t{ projectionOnRay.Magnitude() - insideSphereSegment };
@@ -55,9 +53,9 @@ namespace dae
 					hitRecord.normal = hitRecord.origin - sphere.origin;
 					hitRecord.normal.Normalize();
 				}
-				
+				return true;
 			}
-			return true;
+			return false;
 		}
 
 		inline bool HitTest_Sphere(const Sphere& sphere, const Ray& ray)
@@ -83,11 +81,12 @@ namespace dae
 				}
 				if (t < hitRecord.t)
 				{
+					
 					hitRecord.t = t;
 					hitRecord.didHit = true;
 					hitRecord.materialIndex = plane.materialIndex;
 					hitRecord.origin = ray.origin + ray.direction* hitRecord.t;
-					hitRecord.normal = plane.origin - hitRecord.origin;
+					hitRecord.normal = plane.normal;
 					hitRecord.normal.Normalize();
 					return true;
 				}
@@ -144,9 +143,18 @@ namespace dae
 
 		inline ColorRGB GetRadiance(const Light& light, const Vector3& target)
 		{
-			//todo W3
-			assert(false && "No Implemented Yet!");
-			return {};
+			ColorRGB final{};
+			Vector3 lightToTarget{ light.origin - target };
+			if (light.type == LightType::Point)
+			{
+				final = light.color * light.intensity / lightToTarget.SqrMagnitude();
+				
+			}
+			else if (light.type == LightType::Directional)
+			{
+				final = light.color * light.intensity;
+			}
+			return final;
 		}
 	}
 

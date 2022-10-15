@@ -50,23 +50,64 @@ void Renderer::Render(Scene* pScene) const
 			
 			if (closestHit.didHit)
 			{
-				finalColor = materials[closestHit.materialIndex]->Shade();
+				//finalColor = materials[closestHit.materialIndex]->Shade();
 				float offset{ 0.0001f };
 				Ray lightRay{};
 				lightRay.origin = closestHit.origin + closestHit.normal * (offset *2);
+
 				for (const Light& currentLight: lights)
 				{
 					Vector3 dirToLight{ LightUtils::GetDirectionToLight(currentLight,lightRay.origin) };
 					lightRay.direction = dirToLight.Normalized();
 					lightRay.min = offset;
 					lightRay.max = dirToLight.Magnitude();
-					if (pScene->DoesHit(lightRay))
+
+					float lambertCosine{ Vector3::Dot(closestHit.normal, lightRay.direction) };
+					bool doesHit{ pScene->DoesHit(lightRay) };
+
+					switch (m_CurrentLightingMode)
 					{
-						finalColor *= 0.5f;
+					case dae::Renderer::LightingMode::ObservedArea:
+						if (lambertCosine > 0.f)
+						{
+							if (m_ShadowsEnabled)
+							{
+								if (doesHit)
+									break;
+							}
+							finalColor += ColorRGB{ lambertCosine,lambertCosine,lambertCosine };
+						}
+						break;
+					case dae::Renderer::LightingMode::Radiance:
+						if (m_ShadowsEnabled)
+						{
+							if (doesHit)
+								break;
+						}
+						finalColor += LightUtils::GetRadiance(currentLight, closestHit.origin);
+						break;
+					case dae::Renderer::LightingMode::BRDF:
+						
+						break;
+					case dae::Renderer::LightingMode::Combined:
+						break;
 					}
+					
+					//finalColor += materials[closestHit.materialIndex]->Shade(closestHit, lightRay.direction, -viewRay.direction);
+					if (!pScene->DoesHit(lightRay))
+					{
+						
+						if (lambertCosine > 0.f)
+						{
+							finalColor += LightUtils::GetRadiance(currentLight, closestHit.origin) * materials[closestHit.materialIndex]->Shade(closestHit,lightRay.direction,-viewRay.direction) * lambertCosine;
+							
+						}
+						continue;
+					}
+					
 				}
 			}
-
+			
 			//Update Color in Buffer
 			finalColor.MaxToOne();
 
@@ -85,4 +126,9 @@ void Renderer::Render(Scene* pScene) const
 bool Renderer::SaveBufferToImage() const
 {
 	return SDL_SaveBMP(m_pBuffer, "RayTracing_Buffer.bmp");
+}
+
+void dae::Renderer::CycleLightingMode()
+{
+
 }
