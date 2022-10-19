@@ -28,7 +28,7 @@ void Renderer::Render(Scene* pScene) const
 	float aspectRatio{ static_cast<float>(m_Width) / m_Height };
 	float fovRadians{tanf( TO_RADIANS * (camera.fovAngle /2)) };
 	
-
+	ColorRGB finalColor{};
 	for (int px{}; px < m_Width; ++px)
 	{
 		float cx{static_cast<float>( (2 * (px + 0.5) - m_Width) / m_Width) * aspectRatio * fovRadians };
@@ -43,14 +43,14 @@ void Renderer::Render(Scene* pScene) const
 			rayDir.Normalize();
 
 			Ray viewRay{ camera.origin,rayDir};
-			ColorRGB finalColor{};
+			
 			HitRecord closestHit{};
+			finalColor = dae::colors::Black;
 
 			pScene->GetClosestHit(viewRay, closestHit);
 			
 			if (closestHit.didHit)
 			{
-				//finalColor = materials[closestHit.materialIndex]->Shade();
 				float offset{ 0.0001f };
 				Ray lightRay{};
 				lightRay.origin = closestHit.origin + closestHit.normal * (offset *2);
@@ -63,48 +63,39 @@ void Renderer::Render(Scene* pScene) const
 					lightRay.max = dirToLight.Magnitude();
 
 					float lambertCosine{ Vector3::Dot(closestHit.normal, lightRay.direction) };
-					bool doesHit{ pScene->DoesHit(lightRay) };
+					bool skipCalculations{ false };
 
-					switch (m_CurrentLightingMode)
+					if (m_ShadowsEnabled)
 					{
-					case dae::Renderer::LightingMode::ObservedArea:
-						if (lambertCosine > 0.f)
+						skipCalculations = pScene->DoesHit(lightRay);			
+					}
+
+					if (!skipCalculations)
+					{
+						switch (m_CurrentLightingMode)
 						{
-							if (m_ShadowsEnabled)
+						case dae::Renderer::LightingMode::ObservedArea:
+							if (lambertCosine > 0.f)
 							{
-								if (doesHit)
-									break;
+								finalColor += ColorRGB{ lambertCosine,lambertCosine,lambertCosine };
 							}
-							finalColor += ColorRGB{ lambertCosine,lambertCosine,lambertCosine };
+							break;
+						case dae::Renderer::LightingMode::Radiance:
+							finalColor += LightUtils::GetRadiance(currentLight, closestHit.origin);
+							break;
+						case dae::Renderer::LightingMode::BRDF:
+							finalColor += materials[closestHit.materialIndex]->Shade(closestHit, lightRay.direction, -viewRay.direction);
+							break;
+						case dae::Renderer::LightingMode::Combined:
+							if (lambertCosine > 0.f)
+							{
+								finalColor += LightUtils::GetRadiance(currentLight, closestHit.origin) * materials[closestHit.materialIndex]->Shade(closestHit, lightRay.direction, -viewRay.direction) * lambertCosine;
+							}
+							break;
 						}
-						break;
-					case dae::Renderer::LightingMode::Radiance:
-						if (m_ShadowsEnabled)
-						{
-							if (doesHit)
-								break;
-						}
-						finalColor += LightUtils::GetRadiance(currentLight, closestHit.origin);
-						break;
-					case dae::Renderer::LightingMode::BRDF:
-						
-						break;
-					case dae::Renderer::LightingMode::Combined:
-						break;
 					}
 					
-					//finalColor += materials[closestHit.materialIndex]->Shade(closestHit, lightRay.direction, -viewRay.direction);
-					if (!pScene->DoesHit(lightRay))
-					{
-						
-						if (lambertCosine > 0.f)
-						{
-							finalColor += LightUtils::GetRadiance(currentLight, closestHit.origin) * materials[closestHit.materialIndex]->Shade(closestHit,lightRay.direction,-viewRay.direction) * lambertCosine;
-							
-						}
-						continue;
-					}
-					
+			
 				}
 			}
 			
@@ -130,5 +121,12 @@ bool Renderer::SaveBufferToImage() const
 
 void dae::Renderer::CycleLightingMode()
 {
-
+	if (m_CurrentLightingMode == LightingMode::Combined)
+	{
+		m_CurrentLightingMode = LightingMode::ObservedArea;
+	}
+	else
+	{
+		m_CurrentLightingMode = static_cast<LightingMode>(static_cast<int>(m_CurrentLightingMode) + 1);
+	}
 }

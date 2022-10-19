@@ -32,11 +32,10 @@ namespace dae
 		 */
 		static ColorRGB Phong(float ks, float exp, const Vector3& l, const Vector3& v, const Vector3& n)
 		{
-			float theta{ Vector3::Dot(n,l) };
+			float theta{ std::max(Vector3::Dot(n,l),0.f) };
 			Vector3 r{2.f *theta  * n -l };
-			float alpha{ Vector3::Dot(r,v) };
-			if (alpha < 0.f)
-				alpha = 0.f;
+			float alpha{ std::max(Vector3::Dot(r,v),0.f) };
+	
 			float result{ ks * powf(alpha,exp) };
 			return ColorRGB{result,result,result};
 		}
@@ -50,8 +49,9 @@ namespace dae
 		 */
 		static ColorRGB FresnelFunction_Schlick(const Vector3& h, const Vector3& v, const ColorRGB& f0)
 		{
-			ColorRGB result{ f0 + (ColorRGB{1.f,1.f,1.f} - f0) * powf(1 - Vector3::Dot(h,v),5)};
-			return result;
+			float factor{ 1 - std::max(Vector3::Dot(h,v),0.f) };
+			
+			return { f0 + (ColorRGB{1.f,1.f,1.f} - f0) * factor * factor * factor * factor * factor };
 		}
 
 		/**
@@ -64,11 +64,12 @@ namespace dae
 		static float NormalDistribution_GGX(const Vector3& n, const Vector3& h, float roughness)
 		{
 			float a{ roughness * roughness };
-			float dotNHsqr{ powf(Vector3::Dot(n,h),2) };
+			float dot{std::max( Vector3::Dot(n,h),0.0f) };
+			float dotNHsqr{ dot * dot };
 			float aSqrMin1{ a * a - 1 };
-			float denominator{ powf((dotNHsqr * aSqrMin1 + 1),2) };
-			float result{ a * a / (PI * denominator) };
-			return result;
+			float factor{ dotNHsqr * aSqrMin1 + 1 };
+			float denominator{ factor * factor };
+			return a * a / (PI * denominator);
 		}
 
 
@@ -82,12 +83,11 @@ namespace dae
 		static float GeometryFunction_SchlickGGX(const Vector3& n, const Vector3& v, float roughness)
 		{
 			float a{ roughness * roughness };
-			float k{ powf(a + 1,2) / 8.f };
-			float nDotV{ Vector3::Dot(n,v) };
-			if (nDotV < 0)
-				nDotV = 0;
-			float result{ nDotV / (nDotV * (1 - k) + k) };
-			return result;
+			float factor{ a + 1 };
+			float k{ (factor * factor) / 8.f };
+			float nDotV{ std::max(Vector3::Dot(n,v),0.f) };
+
+			return { nDotV / (nDotV * (1 - k) + k) };
 		}
 
 		/**
