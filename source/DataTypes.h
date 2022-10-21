@@ -123,20 +123,47 @@ namespace dae
 
 		void CalculateNormals()
 		{
-			assert(false && "No Implemented Yet!");
+			if (static_cast<int>(indices.size()) % 3 !=0)
+			{
+				return;
+			}
+
+			int nrVertices{ 3 };
+			int triangleCount{ static_cast<int>(indices.size()) / nrVertices };
+
+			Vector3 v0{};
+			Vector3 v1{};
+			Vector3 v2{};
+
+			for (size_t currentTriangle = 0;  currentTriangle < triangleCount; ++currentTriangle)
+			{
+				v0 = positions[ indices[currentTriangle * nrVertices]];
+				v1 = positions[indices[currentTriangle * nrVertices + 1]];
+				v2 = positions[indices[currentTriangle * nrVertices + 2]];
+
+				normals.push_back(Vector3::Cross(v1 - v0, v2 - v0).Normalized());
+			}
+					
 		}
 
 		void UpdateTransforms()
-		{
-			assert(false && "No Implemented Yet!");
-			//Calculate Final Transform 
-			//const auto finalTransform = ...
+		{		
+			auto transformMatrix = translationTransform * rotationTransform * scaleTransform;
 
-			//Transform Positions (positions > transformedPositions)
-			//...
+			transformedPositions.reserve(positions.size());
+			transformedNormals.reserve(normals.size());
 
-			//Transform Normals (normals > transformedNormals)
-			//...
+			for (size_t i = 0; i < positions.size(); i++)
+			{
+				transformedPositions[i] = transformMatrix.TransformPoint(positions[i]);
+				
+			}
+
+			for (size_t i = 0; i < normals.size(); i++)
+			{
+				transformedNormals[i] = transformMatrix.TransformVector(normals[i]);
+			}
+				
 		}
 	};
 #pragma endregion

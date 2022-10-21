@@ -69,7 +69,6 @@ namespace dae
 		inline bool HitTest_Plane(const Plane& plane, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
 			Vector3 planeNormal{ plane.normal };
-
 			float t{ Vector3::Dot(plane.origin - ray.origin,planeNormal) / Vector3::Dot(ray.direction,planeNormal) };
 		
 
@@ -105,10 +104,58 @@ namespace dae
 #pragma region Triangle HitTest
 		//TRIANGLE HIT-TESTS
 		inline bool HitTest_Triangle(const Triangle& triangle, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
-		{
-			//todo W5
-			assert(false && "No Implemented Yet!");
-			return false;
+		{	
+			Vector3 v0{ triangle.v0 }, v1{ triangle.v1 }, v2{ triangle.v2 };
+			Vector3 trNormal{ triangle.normal };
+			Vector3 rayOrigin{ ray.origin };
+			Vector3 rayDir{ ray.direction };
+			Vector3 L{ (v0 + v1 + v2) / 3 - rayOrigin };
+
+			float t{ Vector3::Dot(L,trNormal) / Vector3::Dot(rayDir,trNormal) };
+
+			if (t < ray.min || t > ray.max)
+				return false;
+			if (t > hitRecord.t)
+				return false;
+
+			Vector3 P{ rayOrigin + t * ray.direction };
+			
+			if (Vector3::Dot(trNormal, Vector3::Cross(v1 - v0, P - v0)) < 0)
+				return false;
+			if (Vector3::Dot(trNormal, Vector3::Cross(v2 - v1, P - v1)) < 0)
+				return false;
+			if (Vector3::Dot(trNormal, Vector3::Cross(v0 - v2, P - v2)) < 0)
+				return false;
+			
+			TriangleCullMode cullMode{triangle.cullMode};
+			if (ignoreHitRecord)
+			{
+				if (triangle.cullMode == TriangleCullMode::FrontFaceCulling)
+				{
+					cullMode = TriangleCullMode::BackFaceCulling;
+				}
+				else if (triangle.cullMode == TriangleCullMode::BackFaceCulling)
+				{
+					cullMode = TriangleCullMode::FrontFaceCulling;
+				}
+			}
+
+			if (cullMode == TriangleCullMode::BackFaceCulling)
+				if (Vector3::Dot(trNormal, rayDir) > 0)
+					return false;
+
+			if (cullMode == TriangleCullMode::FrontFaceCulling)
+				if (Vector3::Dot(trNormal, rayDir) < 0)
+					return false;
+
+			hitRecord.t = t;
+			hitRecord.didHit = true;
+			hitRecord.materialIndex = triangle.materialIndex;
+			hitRecord.origin = P;
+			hitRecord.normal = trNormal;
+			hitRecord.normal.Normalize();
+			return true;
+
 		}
 
 		inline bool HitTest_Triangle(const Triangle& triangle, const Ray& ray)
@@ -120,9 +167,33 @@ namespace dae
 #pragma region TriangeMesh HitTest
 		inline bool HitTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
-			//todo W5
-			assert(false && "No Implemented Yet!");
-			return false;
+			int nrVertices{ 3 };
+			int nrTriangles{ static_cast<int>(mesh.indices.size()) / nrVertices };
+			Triangle triangle{};
+			triangle.cullMode = mesh.cullMode;
+			if (ignoreHitRecord)
+			{
+				if (triangle.cullMode == TriangleCullMode::FrontFaceCulling)
+				{
+					triangle.cullMode = TriangleCullMode::BackFaceCulling;
+				}
+				else if (triangle.cullMode == TriangleCullMode::BackFaceCulling)
+				{
+					triangle.cullMode = TriangleCullMode::FrontFaceCulling;
+				}
+			}
+
+			triangle.materialIndex = mesh.materialIndex;
+			for (int currentTriangle = 0; currentTriangle < nrTriangles; currentTriangle++)
+			{
+				triangle.v0 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices]];
+				triangle.v1 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 1]];
+				triangle.v2 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 2]];
+				triangle.normal = mesh.transformedNormals[currentTriangle];
+				HitTest_Triangle(triangle, ray, hitRecord);
+			}
+
+			return hitRecord.didHit;
 		}
 
 		inline bool HitTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray)
