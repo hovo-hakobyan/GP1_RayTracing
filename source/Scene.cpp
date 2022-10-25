@@ -260,6 +260,7 @@ namespace dae {
 		AddPointLight(Vector3{ -2.5f,5.f,-5.f }, 70.f, ColorRGB{ 1.f,.8f,.45f }); 
 		AddPointLight(Vector3{ 2.5f,2.5f,-5.f }, 50.f, ColorRGB{ .34f,.47f,.68f });
 	}
+
 	void Scene_W4_TestScene::Initialize()
 	{
 		m_Camera.origin = { 0.f, 1.f, -5.f };
@@ -310,6 +311,7 @@ namespace dae {
 
 
 	}
+	
 	void Scene_W4_ReferenceScene::Initialize()
 	{
 		sceneName = "Reference Scene";
@@ -373,6 +375,10 @@ namespace dae {
 			m->RotateY(yawAngle);
 			m->UpdateTransforms();
 		}
+	}
+	Scene_W4_BunnyScene::~Scene_W4_BunnyScene()
+	{
+		delete m_pBunny;
 	}
 	void Scene_W4_BunnyScene::Initialize()
 	{

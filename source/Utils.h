@@ -113,10 +113,12 @@ namespace dae
 
 			float t{ Vector3::Dot(L,trNormal) / Vector3::Dot(rayDir,trNormal) };
 
-			if (t < ray.min || t > ray.max)
-				return false;
 			if (t > hitRecord.t)
 				return false;
+
+			if (t < ray.min || t > ray.max)
+				return false;
+			
 
 			Vector3 P{ rayOrigin + t * ray.direction };
 			

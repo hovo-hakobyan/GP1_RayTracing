@@ -148,20 +148,20 @@ namespace dae
 
 		void UpdateTransforms()
 		{		
-			auto transformMatrix = translationTransform * rotationTransform * scaleTransform;
-
-			transformedPositions.reserve(positions.size());
 			transformedNormals.reserve(normals.size());
+			transformedPositions.reserve(positions.size());
+
+			auto transformMatrix = translationTransform * rotationTransform * scaleTransform;
 
 			for (size_t i = 0; i < positions.size(); i++)
 			{
-				transformedPositions[i] = transformMatrix.TransformPoint(positions[i]);
+				transformedPositions.emplace_back(transformMatrix.TransformPoint(positions[i]));
 				
 			}
 
 			for (size_t i = 0; i < normals.size(); i++)
 			{
-				transformedNormals[i] = transformMatrix.TransformVector(normals[i]);
+				transformedNormals.emplace_back(transformMatrix.TransformVector(normals[i]));
 			}
 				
 		}
