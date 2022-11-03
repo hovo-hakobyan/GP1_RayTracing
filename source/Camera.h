@@ -42,8 +42,9 @@ namespace dae
 			right.Normalize();
 			up = Vector3::Cross(forward, right);
 			up.Normalize();
+			cameraToWorld = { right,up,forward,origin };
 			
-			return {right,up,forward,origin};
+			return cameraToWorld;
 		}
 		
 		void Update(Timer* pTimer)
@@ -140,11 +141,7 @@ namespace dae
 					totalPitch += rotSpeed * deltaTime;
 					
 				}
-			}
-
-		
-			cameraToWorld = CalculateCameraToWorld();
-			
+			}		
 		}
 	};
 }
