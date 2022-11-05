@@ -348,19 +348,19 @@ namespace dae {
 		m_pMeshes[0] = AddTriangleMesh(TriangleCullMode::BackFaceCulling, matLambert_White);
 		m_pMeshes[0]->AppendTriangle(baseTriangle, true);
 		m_pMeshes[0]->Translate({ -1.75f, 4.5f, 0.0f });
-		m_pMeshes[0]->UpdateAABB();
+		
 		m_pMeshes[0]->UpdateTransforms();
 
 		m_pMeshes[1] = AddTriangleMesh(TriangleCullMode::FrontFaceCulling, matLambert_White);
 		m_pMeshes[1]->AppendTriangle(baseTriangle, true);
 		m_pMeshes[1]->Translate({ 0.0f, 4.5f, 0.0f });
-		m_pMeshes[1]->UpdateAABB();
+		
 		m_pMeshes[1]->UpdateTransforms();
 
 		m_pMeshes[2] = AddTriangleMesh(TriangleCullMode::NoCulling, matLambert_White);
 		m_pMeshes[2]->AppendTriangle(baseTriangle, true);
 		m_pMeshes[2]->Translate({ 1.75f, 4.5f, 0.0f });
-		m_pMeshes[2]->UpdateAABB();
+		
 		m_pMeshes[2]->UpdateTransforms();
 
 		//Light
@@ -399,12 +399,12 @@ namespace dae {
 
 		m_pBunny = AddTriangleMesh(dae::TriangleCullMode::BackFaceCulling, matLambert_White);
 		Utils::ParseOBJ("Resources/lowpoly_bunny.obj", m_pBunny->positions, m_pBunny->normals, m_pBunny->indices);
-
+		//m_pBunny->CalculateNormals();
+		m_pBunny->CalculateCentroids();
 		m_pBunny->Scale({ 2.f,2.f,2.f });
-
-		m_pBunny->UpdateAABB();
+		
 		m_pBunny->UpdateTransforms();
-
+		m_pBunny->InitBVH();
 
 		//Light
 		AddPointLight(Vector3{ 0.0f, 5.0f, 5.0f }, 50.f, ColorRGB{ 1.0f, 0.61f, 0.45f }); // Backlight
@@ -413,10 +413,10 @@ namespace dae {
 	}
 	void Scene_W4_BunnyScene::Update(Timer* pTimer)
 	{
-		Scene::Update(pTimer);
+	/*	Scene::Update(pTimer);
 
 		const auto yawAngle = (cosf(pTimer->GetTotal()) + 1.f) / 2.f * PI_2;
 		m_pBunny->RotateY(yawAngle);
-		m_pBunny->UpdateTransforms();
+		m_pBunny->UpdateTransforms();*/
 	}
 }

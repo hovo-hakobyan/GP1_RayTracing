@@ -167,40 +167,57 @@ namespace dae
 		}
 #pragma endregion
 #pragma region SlabTest
-		inline bool SlabTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray)
+		inline bool SlabTest_TriangleMesh(const Vector3& minAABB,const Vector3& maxAABB, const Ray& ray)
 		{
-			float tx1 = (mesh.transformedMinAABB.x - ray.origin.x) / ray.direction.x;
-			float tx2 = (mesh.transformedMaxAABB.x - ray.origin.x) / ray.direction.x;
+			float tx1 = (minAABB.x - ray.origin.x) / ray.direction.x;
+			float tx2 = (maxAABB.x - ray.origin.x) / ray.direction.x;
 
 			float tmin = std::min(tx1, tx2);
 			float tmax = std::max(tx1, tx2);
 
-			float ty1 = (mesh.transformedMinAABB.y - ray.origin.y) / ray.direction.y;
-			float ty2 = (mesh.transformedMaxAABB.y - ray.origin.y) / ray.direction.y;
+			float ty1 = (minAABB.y - ray.origin.y) / ray.direction.y;
+			float ty2 = (maxAABB.y - ray.origin.y) / ray.direction.y;
 
 			tmin = std::max(tmin, std::min(ty1, ty2));
 			tmax = std::min(tmax, std::max(ty1, ty2));
 
-			float tz1 = (mesh.transformedMinAABB.z - ray.origin.z) / ray.direction.z;
-			float tz2 = (mesh.transformedMaxAABB.z - ray.origin.z) / ray.direction.z;
+			float tz1 = (minAABB.z - ray.origin.z) / ray.direction.z;
+			float tz2 = (maxAABB.z - ray.origin.z) / ray.direction.z;
 
 			tmin = std::max(tmin, std::min(tz1, tz2));
 			tmax = std::min(tmax, std::max(tz1, tz2));
-
+			
 			return tmax > 0 && tmax >= tmin;
+		}
+
+		 inline void IntersectBVH(const Ray& ray, const TriangleMesh& mesh,const uint32_t nodeIdx,std::vector<int>& indexes)
+		{
+			const BVHNode& node = mesh.bvhNodes[nodeIdx];
+
+			if (!SlabTest_TriangleMesh(node.minAABB, node.maxAABB, ray))
+				return;
+
+			if (node.nrPrimitives !=0) //Leaf
+			{		
+				indexes.push_back(nodeIdx);
+				return;
+			}
+			else
+			{
+				IntersectBVH(ray, mesh, node.leftChild, indexes);
+				IntersectBVH(ray, mesh, node.leftChild + 1, indexes);
+			}
 		}
 #pragma endregion
 #pragma region TriangeMesh HitTest
 		inline bool HitTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
-			//slabtest
-			if (!SlabTest_TriangleMesh(mesh, ray))
-			{
-				return false;
-			}
-		
-			int nrVertices{ 3 };
-			int nrTriangles{ static_cast<int>(mesh.indices.size()) / nrVertices };
+			std::vector<int> indexes{};
+			IntersectBVH(ray, mesh, mesh.rootNodeIdx, indexes);
+
+			if (indexes.size() ==0)
+				return hitRecord.didHit;
+
 			Triangle triangle{};
 			triangle.cullMode = mesh.cullMode;
 			if (ignoreHitRecord)
@@ -215,14 +232,22 @@ namespace dae
 				}
 			}
 
-			triangle.materialIndex = mesh.materialIndex;
-			for (int currentTriangle = 0; currentTriangle < nrTriangles; currentTriangle++)
+			for (size_t i = 0; i < indexes.size(); i++)
 			{
-				triangle.v0 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices]];
-				triangle.v1 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 1]];
-				triangle.v2 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 2]];
-				triangle.normal = mesh.transformedNormals[currentTriangle];
-				HitTest_Triangle(triangle, ray, hitRecord);
+				triangle.materialIndex = mesh.materialIndex;
+				int nrVertices{ 3 };
+				uint32_t start = mesh.bvhNodes[indexes[i]].firstPrimitiveIdx;
+				uint32_t end = start + mesh.bvhNodes[indexes[i]].nrPrimitives;
+
+				for (uint32_t currentTriangle = start; currentTriangle < end; ++currentTriangle)
+				{					
+					triangle.v0 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices]];
+					triangle.v1 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 1]];
+					triangle.v2 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 2]];
+					triangle.normal = mesh.transformedNormals[currentTriangle];
+
+					HitTest_Triangle(triangle, ray, hitRecord);
+				}
 			}
 
 			return hitRecord.didHit;

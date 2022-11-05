@@ -3,6 +3,7 @@
 
 #include "Math.h"
 #include "vector"
+#include <iostream> //TODO remove this
 
 namespace dae
 {
@@ -34,7 +35,10 @@ namespace dae
 	{
 		Triangle() = default;
 		Triangle(const Vector3& _v0, const Vector3& _v1, const Vector3& _v2, const Vector3& _normal):
-			v0{_v0}, v1{_v1}, v2{_v2}, normal{_normal.Normalized()}{}
+			v0{_v0}, v1{_v1}, v2{_v2}, normal{_normal.Normalized()}
+		{
+			centroid = (_v0 + _v1 + _v2) / 3.0f;
+		}
 
 		Triangle(const Vector3& _v0, const Vector3& _v1, const Vector3& _v2) :
 			v0{ _v0 }, v1{ _v1 }, v2{ _v2 }
@@ -42,6 +46,7 @@ namespace dae
 			const Vector3 edgeV0V1 = v1 - v0;
 			const Vector3 edgeV0V2 = v2 - v0;
 			normal = Vector3::Cross(edgeV0V1, edgeV0V2).Normalized();
+			centroid = (_v0 + _v1 + _v2) / 3.0f;
 		}
 
 		Vector3 v0{};
@@ -49,9 +54,19 @@ namespace dae
 		Vector3 v2{};
 
 		Vector3 normal{};
+		Vector3 centroid{};
 
 		TriangleCullMode cullMode{};
 		unsigned char materialIndex{};
+	};
+
+	//Implemented using https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+
+	struct BVHNode
+	{
+		Vector3 minAABB, maxAABB;
+		uint32_t leftChild;
+		uint32_t firstPrimitiveIdx, nrPrimitives;
 	};
 
 	struct TriangleMesh
@@ -60,23 +75,31 @@ namespace dae
 		TriangleMesh(const std::vector<Vector3>& _positions, const std::vector<int>& _indices, TriangleCullMode _cullMode):
 		positions(_positions), indices(_indices), cullMode(_cullMode)
 		{
+			trCount = static_cast<int>(_indices.size()) / 3;
 			//Calculate Normals
 			CalculateNormals();
+			CalculateCentroids();
+			InitBVH();
 
 			//Update Transforms
-			UpdateTransforms();
+			//UpdateTransforms();
 		}
 
 		TriangleMesh(const std::vector<Vector3>& _positions, const std::vector<int>& _indices, const std::vector<Vector3>& _normals, TriangleCullMode _cullMode) :
 			positions(_positions), indices(_indices), normals(_normals), cullMode(_cullMode)
 		{
-			UpdateTransforms();
+			trCount = static_cast<int>(_indices.size()) / 3;
+			CalculateCentroids();
+			InitBVH();
+			//UpdateTransforms();
 		}
 
 		std::vector<Vector3> positions{};
 		std::vector<Vector3> normals{};
+		std::vector<Vector3> centroids{};
 		std::vector<int> indices{};
 		unsigned char materialIndex{};
+		uint32_t trCount{};
 
 		TriangleCullMode cullMode{TriangleCullMode::BackFaceCulling};
 
@@ -92,6 +115,11 @@ namespace dae
 
 		std::vector<Vector3> transformedPositions{};
 		std::vector<Vector3> transformedNormals{};
+		std::vector<Vector3> transformedCentroids{};
+
+		std::vector<BVHNode> bvhNodes{};
+		uint32_t rootNodeIdx{};
+		uint32_t nodesUsed{};
 
 		void Translate(const Vector3& translation)
 		{
@@ -129,34 +157,51 @@ namespace dae
 
 		void CalculateNormals()
 		{
-			if (static_cast<int>(indices.size()) % 3 !=0)
+			if (trCount % 3 !=0)
 			{
 				return;
 			}
-
-			int nrVertices{ 3 };
-			int triangleCount{ static_cast<int>(indices.size()) / nrVertices };
 
 			Vector3 v0{};
 			Vector3 v1{};
 			Vector3 v2{};
 
-			for (size_t currentTriangle = 0;  currentTriangle < triangleCount; ++currentTriangle)
+			for (size_t currentTriangle = 0;  currentTriangle < trCount; ++currentTriangle)
 			{
-				v0 = positions[ indices[currentTriangle * nrVertices]];
-				v1 = positions[indices[currentTriangle * nrVertices + 1]];
-				v2 = positions[indices[currentTriangle * nrVertices + 2]];
+				v0 = positions[ indices[currentTriangle * 3]];
+				v1 = positions[indices[currentTriangle * 3 + 1]];
+				v2 = positions[indices[currentTriangle * 3 + 2]];
 
 				normals.push_back(Vector3::Cross(v1 - v0, v2 - v0).Normalized());
 			}
 					
 		}
 
+		void CalculateCentroids()
+		{
+			trCount = static_cast<int>(indices.size()) / 3;
+			centroids.reserve(normals.size());
+			Vector3 v0{};
+			Vector3 v1{};
+			Vector3 v2{};
+
+			for (size_t currentTriangle = 0; currentTriangle < trCount; ++currentTriangle)
+			{
+				v0 = positions[indices[currentTriangle * 3]];
+				v1 = positions[indices[currentTriangle * 3 + 1]];
+				v2 = positions[indices[currentTriangle * 3 + 2]];
+
+				centroids.push_back((v0 + v1 + v2) / 3.f);
+			}
+		}
+
 		void UpdateTransforms()
 		{		
 			transformedNormals.clear();
 			transformedPositions.clear();
+			transformedCentroids.clear();
 			transformedNormals.reserve(normals.size());
+			transformedCentroids.reserve(centroids.size());
 			transformedPositions.reserve(positions.size());
 
 			auto transformMatrix = translationTransform * rotationTransform * scaleTransform;
@@ -167,27 +212,35 @@ namespace dae
 				
 			}
 
-			UpdateTransformedAABB(transformMatrix);
+			for (size_t i = 0; i < centroids.size(); i++)
+			{
+				transformedCentroids.emplace_back(transformMatrix.TransformPoint(centroids[i]));
+			}
 
 			for (size_t i = 0; i < normals.size(); i++)
 			{
 				transformedNormals.emplace_back(transformMatrix.TransformVector(normals[i]));
 			}
-				
+			
+			
+			//UpdateTransformedAABB(transformMatrix);
 		}
 
-		void UpdateAABB()
-		{
-			if (positions.size() > 0)
-			{
-				minAABB = positions[0];
-				maxAABB = positions[0];
-				for (auto& p : positions )
-				{
-					minAABB = Vector3::Min(p, minAABB);
-					maxAABB = Vector3::Max(p, maxAABB);
-				}
+		void UpdateAABB(uint32_t nodeIdx)
+		{	
+			BVHNode& node = bvhNodes[nodeIdx];
 
+			uint32_t start{node.firstPrimitiveIdx *3};
+			uint32_t end{ start + node.nrPrimitives*3};
+
+			node.minAABB = Vector3{INFINITY,INFINITY,INFINITY};
+			node.maxAABB = Vector3{ -INFINITY,-INFINITY,-INFINITY };
+
+			for (uint32_t i = start; i < end ; ++i)
+			{
+				node.minAABB = Vector3::Min(transformedPositions[indices[i]], node.minAABB);
+				node.maxAABB = Vector3::Max(transformedPositions[indices[i]], node.maxAABB);
+			
 			}
 		}
 
@@ -235,7 +288,126 @@ namespace dae
 
 			transformedMinAABB = tMinAABB;
 			transformedMaxAABB = tMaxAABB;
+
 		}
+		
+		void InitBVH()
+		{
+			bvhNodes.reserve(trCount * 2 - 1);
+
+			for (size_t i = 0; i < bvhNodes.capacity(); i++)
+			{
+				bvhNodes.push_back(BVHNode{});
+			}
+
+			rootNodeIdx = 0;
+			nodesUsed = 1;
+
+			bvhNodes[rootNodeIdx].leftChild = 0; //Means no left child
+			bvhNodes[rootNodeIdx].firstPrimitiveIdx = 0; 
+			bvhNodes[rootNodeIdx].nrPrimitives = trCount; //IsLeaf
+
+			UpdateAABB(rootNodeIdx);
+			Subdivide(rootNodeIdx);
+		}
+
+		void Subdivide(uint32_t nodeIdx)
+		{
+			BVHNode& node = bvhNodes[nodeIdx];
+			//Terminate recursion
+			if (node.nrPrimitives <= 2)
+				return; 
+
+			Vector3 axisSize = node.maxAABB - node.minAABB;
+			//We subdevide along the longest axis
+			int axis = 0; //x-axis
+			if (axisSize.y > axisSize.x) 
+			{
+				axis = 1; // y-axis
+			}
+			if (axisSize.z > axisSize[axis])
+			{
+				axis = 2; //z-axis
+			}
+			bool testedAllAxis{ false };
+			float splitPos{ node.minAABB[axis] + axisSize[axis] / 2.0f };
+
+			//Sort the primitives (Quicksort)
+			int left = node.firstPrimitiveIdx;
+			int right = left + node.nrPrimitives - 1;
+			
+			int leftCount{};
+
+			int sortCount{ 0 };
+			while (sortCount <3)
+			{
+				left = node.firstPrimitiveIdx;
+				SortPrimitives(left, right, axis, splitPos);
+				++sortCount;
+				leftCount = left - node.firstPrimitiveIdx;
+
+				if (axis == 2)
+				{
+					axis = 0;
+				}
+				else
+				{
+					++axis;
+				}
+
+				if (leftCount != 0 && leftCount != node.nrPrimitives)
+				{
+					break;
+				}
+			}
+
+		
+			if (leftCount == 0 || leftCount == node.nrPrimitives)
+				return; // Either nothing on the left side, or everything on the left side
+
+			//Create child nodes
+			int leftChildIdx = nodesUsed;
+			nodesUsed += 2;
+
+			node.leftChild = leftChildIdx;
+			bvhNodes[leftChildIdx].firstPrimitiveIdx = node.firstPrimitiveIdx; // Left side starts where the parent's left side starts
+			bvhNodes[leftChildIdx].nrPrimitives = leftCount;
+			bvhNodes[leftChildIdx + 1].firstPrimitiveIdx = left; // While loop made sure this is where the right side starts
+			bvhNodes[leftChildIdx + 1].nrPrimitives = node.nrPrimitives - leftCount; //remaining primitives belong to the right side
+
+			node.nrPrimitives = 0; //Is not leaf 
+			node.firstPrimitiveIdx = 0;
+
+			UpdateAABB(leftChildIdx);
+			UpdateAABB(leftChildIdx + 1);
+
+			Subdivide(leftChildIdx);
+			Subdivide(leftChildIdx + 1);
+		}
+		
+		void SortPrimitives(int& left, int right, int axis, float splitPos)
+		{
+			while (left <= right)
+			{
+				//If the centeroid is on the left side --> OK
+				if (transformedCentroids[left][axis] < splitPos)
+				{
+					left++;
+				}
+				else
+				{
+					//Move to the end of the container
+					std::swap(transformedCentroids[left], transformedCentroids[right]);
+					std::swap(transformedNormals[left], transformedNormals[right]);
+					for (int i = 0; i < 3; i++)
+					{
+						std::swap(indices[left * 3 + i], indices[right * 3 + i]);
+					}
+					--right;
+				}
+			}
+		}
+
 		
 	};
 #pragma endregion
@@ -275,5 +447,6 @@ namespace dae
 		bool didHit{ false };
 		unsigned char materialIndex{ 0 };
 	};
+
 #pragma endregion
 }
