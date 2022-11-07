@@ -3,7 +3,7 @@
 
 #include "Math.h"
 #include "vector"
-#include <iostream> //TODO remove this
+
 
 namespace dae
 {
@@ -61,12 +61,38 @@ namespace dae
 	};
 
 	//Implemented using https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
-
 	struct BVHNode
 	{
 		Vector3 minAABB, maxAABB;
-		uint32_t leftChild;
-		uint32_t firstPrimitiveIdx, nrPrimitives;
+		uint32_t leftFirst, nrPrimitives;
+
+		//leftfirst dependend on nrPrimitives
+			//nrPrimitves = 0 --> NotLeafNode && hasChildren
+			// nrPrimitives !=0 --> LeafNode && NoChildren	
+		//Not too readable but struct size is 32bytes now
+	};
+
+	struct AABB
+	{
+		Vector3 min{INFINITY,INFINITY,INFINITY }, max{ -INFINITY,-INFINITY,-INFINITY };
+
+		void Grow(Vector3 pos)
+		{
+			min = Vector3::Min(min, pos);
+			max = Vector3::Max(max, pos);
+		}
+
+		float Area()
+		{
+			Vector3 size = max - min;
+			return size.x * size.y + size.y * size.z + size.z * size.x;
+		}
+	};
+
+	struct Bin
+	{
+		AABB bounds;
+		uint32_t nrPrimitives = 0;
 	};
 
 	struct TriangleMesh
@@ -80,9 +106,10 @@ namespace dae
 			CalculateNormals();
 			CalculateCentroids();
 			InitBVH();
+			BuildBVH();
 
 			//Update Transforms
-			//UpdateTransforms();
+			UpdateTransforms();
 		}
 
 		TriangleMesh(const std::vector<Vector3>& _positions, const std::vector<int>& _indices, const std::vector<Vector3>& _normals, TriangleCullMode _cullMode) :
@@ -91,7 +118,8 @@ namespace dae
 			trCount = static_cast<int>(_indices.size()) / 3;
 			CalculateCentroids();
 			InitBVH();
-			//UpdateTransforms();
+			BuildBVH();
+			UpdateTransforms();
 		}
 
 		std::vector<Vector3> positions{};
@@ -120,6 +148,8 @@ namespace dae
 		std::vector<BVHNode> bvhNodes{};
 		uint32_t rootNodeIdx{};
 		uint32_t nodesUsed{};
+
+		bool shouldUseBVH = false;
 
 		void Translate(const Vector3& translation)
 		{
@@ -157,10 +187,6 @@ namespace dae
 
 		void CalculateNormals()
 		{
-			if (trCount % 3 !=0)
-			{
-				return;
-			}
 
 			Vector3 v0{};
 			Vector3 v1{};
@@ -204,7 +230,7 @@ namespace dae
 			transformedCentroids.reserve(centroids.size());
 			transformedPositions.reserve(positions.size());
 
-			auto transformMatrix = translationTransform * rotationTransform * scaleTransform;
+			auto transformMatrix = rotationTransform * translationTransform * scaleTransform;
 
 			for (size_t i = 0; i < positions.size(); i++)
 			{
@@ -219,18 +245,42 @@ namespace dae
 
 			for (size_t i = 0; i < normals.size(); i++)
 			{
-				transformedNormals.emplace_back(transformMatrix.TransformVector(normals[i]));
+				transformedNormals.emplace_back(transformMatrix.TransformVector(normals[i]).Normalized());
 			}
 			
-			
-			//UpdateTransformedAABB(transformMatrix);
+			if (!shouldUseBVH)
+			{
+				UpdateTransformedAABB(transformMatrix);
+			}
+			else
+			{
+				RefitBVH();
+			}
 		}
 
 		void UpdateAABB(uint32_t nodeIdx)
 		{	
+			//Single AABB
+			if (!shouldUseBVH)
+			{
+				if (positions.size() > 0)
+				{
+					minAABB = Vector3{INFINITY,INFINITY,INFINITY};
+					maxAABB = Vector3{ -INFINITY,-INFINITY,-INFINITY };
+
+					for (auto& p : positions)
+					{
+						minAABB = Vector3::Min(p, minAABB);
+						maxAABB = Vector3::Max(p, maxAABB);
+					}
+				}
+				return;
+			}
+
+			//BVH
 			BVHNode& node = bvhNodes[nodeIdx];
 
-			uint32_t start{node.firstPrimitiveIdx *3};
+			uint32_t start{node.leftFirst *3};
 			uint32_t end{ start + node.nrPrimitives*3};
 
 			node.minAABB = Vector3{INFINITY,INFINITY,INFINITY};
@@ -299,12 +349,15 @@ namespace dae
 			{
 				bvhNodes.push_back(BVHNode{});
 			}
+			
+		}
 
+		void BuildBVH()
+		{
 			rootNodeIdx = 0;
 			nodesUsed = 1;
 
-			bvhNodes[rootNodeIdx].leftChild = 0; //Means no left child
-			bvhNodes[rootNodeIdx].firstPrimitiveIdx = 0; 
+			bvhNodes[rootNodeIdx].leftFirst = 0;
 			bvhNodes[rootNodeIdx].nrPrimitives = trCount; //IsLeaf
 
 			UpdateAABB(rootNodeIdx);
@@ -314,77 +367,55 @@ namespace dae
 		void Subdivide(uint32_t nodeIdx)
 		{
 			BVHNode& node = bvhNodes[nodeIdx];
-			//Terminate recursion
-			if (node.nrPrimitives <= 2)
-				return; 
+			
+			//Split axis using SAH !!!EXPENSIVE TO CALCULATE BUT PERFORMANT
+			int axis{};
+			float splitPos{};
+			float bestSplitCost{ FindBestSplitPlane(node, axis, splitPos) };
+				
+			//Terminate Recursion
+			float costIfNoSplit{ CalculateNodeCost(node) };
+			if (bestSplitCost >= costIfNoSplit) // If splitting doesn't give us a cheper cost, then don't split
+				return;
 
-			Vector3 axisSize = node.maxAABB - node.minAABB;
-			//We subdevide along the longest axis
-			int axis = 0; //x-axis
-			if (axisSize.y > axisSize.x) 
-			{
-				axis = 1; // y-axis
-			}
-			if (axisSize.z > axisSize[axis])
-			{
-				axis = 2; //z-axis
-			}
-			bool testedAllAxis{ false };
-			float splitPos{ node.minAABB[axis] + axisSize[axis] / 2.0f };
 
 			//Sort the primitives (Quicksort)
-			int left = node.firstPrimitiveIdx;
+			int left = node.leftFirst;
 			int right = left + node.nrPrimitives - 1;
+			SortPrimitives(left, right, axis, splitPos);
 			
-			int leftCount{};
-
-			int sortCount{ 0 };
-			while (sortCount <3)
-			{
-				left = node.firstPrimitiveIdx;
-				SortPrimitives(left, right, axis, splitPos);
-				++sortCount;
-				leftCount = left - node.firstPrimitiveIdx;
-
-				if (axis == 2)
-				{
-					axis = 0;
-				}
-				else
-				{
-					++axis;
-				}
-
-				if (leftCount != 0 && leftCount != node.nrPrimitives)
-				{
-					break;
-				}
-			}
-
-		
+			int leftCount = left - node.leftFirst; //amountTriangles leftside
+			
 			if (leftCount == 0 || leftCount == node.nrPrimitives)
 				return; // Either nothing on the left side, or everything on the left side
 
 			//Create child nodes
 			int leftChildIdx = nodesUsed;
 			nodesUsed += 2;
-
-			node.leftChild = leftChildIdx;
-			bvhNodes[leftChildIdx].firstPrimitiveIdx = node.firstPrimitiveIdx; // Left side starts where the parent's left side starts
+	
+			bvhNodes[leftChildIdx].leftFirst = node.leftFirst; // Left side starts where the parent's left side starts
 			bvhNodes[leftChildIdx].nrPrimitives = leftCount;
-			bvhNodes[leftChildIdx + 1].firstPrimitiveIdx = left; // While loop made sure this is where the right side starts
+			bvhNodes[leftChildIdx + 1].leftFirst = left; // While loop made sure this is where the right side starts
 			bvhNodes[leftChildIdx + 1].nrPrimitives = node.nrPrimitives - leftCount; //remaining primitives belong to the right side
 
 			node.nrPrimitives = 0; //Is not leaf 
-			node.firstPrimitiveIdx = 0;
+			node.leftFirst = leftChildIdx;
+
 
 			UpdateAABB(leftChildIdx);
-			UpdateAABB(leftChildIdx + 1);
+			UpdateAABB(leftChildIdx + 1); //rightChild
 
 			Subdivide(leftChildIdx);
-			Subdivide(leftChildIdx + 1);
+			Subdivide(leftChildIdx + 1); //rightChild
 		}
-		
+
+		float CalculateNodeCost(BVHNode& node)
+		{
+			Vector3 parentSize = node.maxAABB - node.minAABB;
+			float parentArea = parentSize.x * parentSize.y + parentSize.y * parentSize.z + parentSize.z * parentSize.x;
+			return node.nrPrimitives * parentArea;
+		}
+
 		void SortPrimitives(int& left, int right, int axis, float splitPos)
 		{
 			while (left <= right)
@@ -399,6 +430,8 @@ namespace dae
 					//Move to the end of the container
 					std::swap(transformedCentroids[left], transformedCentroids[right]);
 					std::swap(transformedNormals[left], transformedNormals[right]);
+					std::swap(normals[left], normals[right]);
+					std::swap(centroids[left], centroids[right]);
 					for (int i = 0; i < 3; i++)
 					{
 						std::swap(indices[left * 3 + i], indices[right * 3 + i]);
@@ -408,7 +441,112 @@ namespace dae
 			}
 		}
 
+		float FindBestSplitPlane(BVHNode& node, int& axis, float& splitPos)
+		{
+			const uint32_t binCount = 10;
+			float bestCost = INFINITY;
+
+			
+		//For every axis
+			for (int a = 0; a < 3; ++a)
+			{
+				float minBound = INFINITY;
+				float maxBound = -INFINITY;
+				//Makes sure bounding box goes through the centroids
+				for (uint32_t i = 0; i < node.nrPrimitives; i++)
+				{
+					minBound = std::min(transformedCentroids[node.leftFirst + i][a], minBound);
+					maxBound = std::max(transformedCentroids[node.leftFirst + i][a], maxBound);
+				}
+
+				if (minBound == maxBound)
+					continue;
+
+		//Populate the bins
+				Bin bin[binCount];
+				float scale = binCount / (maxBound - minBound);//Used in idxFormula, prevents repeated division which is costly
+
+				for (uint32_t i = 0; i < node.nrPrimitives; ++i)
+				{
+					//in which bin does this centroid rest
+					int binIdx = std::min(binCount - 1, static_cast<uint32_t>(
+						(transformedCentroids[node.leftFirst + i][a] - minBound) * scale));
+
+					//scale that bin based on the primitives inside (makes it as tight as possible)
+					++bin[binIdx].nrPrimitives;
+					bin[binIdx].bounds.Grow(transformedPositions[indices[(node.leftFirst + i) * 3]]);
+					bin[binIdx].bounds.Grow(transformedPositions[indices[(node.leftFirst + i) * 3]]);
+					bin[binIdx].bounds.Grow(transformedPositions[indices[(node.leftFirst + i) * 3]]);
+				}
+
+		//Gather data for the planes between the bins (possible split location)
+				float leftArea[binCount - 1], rightArea[binCount - 1];
+				int leftCount[binCount - 1], rightCount[binCount - 1]; //nr primitives each side depending on split plane
+
+				AABB leftBox, rightBox;
+				int leftSum = 0, rightSum = 0;
+
+				//We consider every right/left box scenarios and save data to find the best SAH later
+				for (uint32_t i = 0; i < binCount -1; i++) //-1 otherwise we don't subdivide the box
+				{
+					//Nr of primitives (LEFT) of the current leftBOX
+					leftSum += bin[i].nrPrimitives;
+					leftCount[i] = leftSum;
+
+					//Resize the current box
+					leftBox.Grow(bin[i].bounds.min);
+					leftBox.Grow(bin[i].bounds.max);
+
+					//Save the current box area for SAH calculations
+					leftArea[i] = leftBox.Area();
+
+					//Same thing but for the right side
+					rightSum += bin[binCount - 1 - i].nrPrimitives;
+					rightCount[binCount - 2 - i] = rightSum;
+
+					rightBox.Grow(bin[binCount - 1 - i].bounds.min);
+					rightBox.Grow(bin[binCount - 1 - i].bounds.max);
+
+					rightArea[binCount - 2 - i] = rightBox.Area();
+
+
+				}
+	
+		//evaluate every plane's SAH cost based on previously collected data
+				scale = (maxBound - minBound) / binCount;
+				for (uint32_t i = 0; i< binCount - 1; ++i)
+				{
+					float planeCost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
+					if (planeCost < bestCost)
+					{
+						bestCost = planeCost;
+						axis = a;
+						splitPos = minBound + scale * (i - 1);
+						
+					}					
+				}
+			}
+			return bestCost;
+		}
 		
+		void RefitBVH()
+		{
+			for (int i = nodesUsed - 1; i >= 0; i--)
+			{
+				BVHNode& node = bvhNodes[i];
+
+				if (node.nrPrimitives !=0)
+				{
+					UpdateAABB(i);
+					continue;
+				}
+				
+				BVHNode& leftChild = bvhNodes[node.leftFirst];
+				BVHNode& rightChild = bvhNodes[node.leftFirst + 1];
+				node.minAABB = Vector3::Min(leftChild.minAABB, rightChild.minAABB);
+				node.maxAABB = Vector3::Max(leftChild.maxAABB, rightChild.maxAABB);
+			}
+		}
 	};
 #pragma endregion
 #pragma region LIGHT
@@ -433,6 +571,7 @@ namespace dae
 	{
 		Vector3 origin{};
 		Vector3 direction{};
+		Vector3 reciprocalDir{}; // 1/n
 
 		float min{ 0.0001f };
 		float max{ FLT_MAX };

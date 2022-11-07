@@ -52,7 +52,8 @@ namespace dae
 		std::vector<Material*> m_Materials{};
 		//temp
 		std::vector<Triangle> m_Triangles{};
-
+		AABB m_aabbTriangles;
+		AABB m_aabbCircles;
 		Camera m_Camera{};
 
 		Sphere* AddSphere(const Vector3& origin, float radius, unsigned char materialIndex = 0);
@@ -155,6 +156,7 @@ namespace dae
 		void Update(Timer* pTimer) override;
 	private:
 		TriangleMesh* m_pMeshes[3]{};
+	
 	};
 
 	class Scene_W4_BunnyScene final : public Scene

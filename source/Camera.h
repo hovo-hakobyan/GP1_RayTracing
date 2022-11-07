@@ -50,8 +50,8 @@ namespace dae
 		void Update(Timer* pTimer)
 		{
 			const float deltaTime = pTimer->GetElapsed();
-			const float moveSpeed{ 10.f };
-			const float rotSpeed{ 2.f };
+			const float moveSpeed{ 17.f };
+			const float rotSpeed{ 4.5f };
 
 			//Keyboard Input
 			const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);

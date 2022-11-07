@@ -28,36 +28,40 @@ namespace dae {
 
 	void dae::Scene::GetClosestHit(const Ray& ray, HitRecord& closestHit) const
 	{
-		
-		for (size_t i = 0; i < m_SphereGeometries.size(); i++)
+		if (GeometryUtils::SlabTest(m_aabbCircles.min,m_aabbCircles.max,ray))
 		{
-			 GeometryUtils::HitTest_Sphere(m_SphereGeometries[i], ray, closestHit);
+			for (size_t i = 0; i < m_SphereGeometries.size(); i++)
+			{
+				GeometryUtils::HitTest_Sphere(m_SphereGeometries[i], ray, closestHit);
+			}
 		}
-
+		
 		for (size_t i = 0; i < m_PlaneGeometries.size(); i++)
 		{
 			GeometryUtils::HitTest_Plane(m_PlaneGeometries[i], ray, closestHit);
 		}
 
-		/*for (size_t i = 0; i < m_Triangles.size(); i++)
+		if (GeometryUtils::SlabTest(m_aabbTriangles.min,m_aabbTriangles.max,ray))
 		{
-			GeometryUtils::HitTest_Triangle(m_Triangles[i], ray, closestHit);
-		}*/
-		
-		for (size_t i = 0; i < m_TriangleMeshGeometries.size(); i++)
-		{
-			GeometryUtils::HitTest_TriangleMesh(m_TriangleMeshGeometries[i], ray,closestHit);
-			
+			for (size_t i = 0; i < m_TriangleMeshGeometries.size(); i++)
+			{
+				GeometryUtils::HitTest_TriangleMesh(m_TriangleMeshGeometries[i], ray, closestHit);
+
+			}
 		}
+		
 	}
 
 	bool Scene::DoesHit(const Ray& ray) const
 	{
 
-		for (size_t i = 0; i < m_SphereGeometries.size(); i++)
+		if (GeometryUtils::SlabTest(m_aabbCircles.min, m_aabbCircles.max, ray))
 		{
-			if (GeometryUtils::HitTest_Sphere(m_SphereGeometries[i], ray))
-				return true;
+			for (size_t i = 0; i < m_SphereGeometries.size(); i++)
+			{
+				if (GeometryUtils::HitTest_Sphere(m_SphereGeometries[i], ray))
+					return true;
+			}
 		}
 
 		for (size_t i = 0; i < m_PlaneGeometries.size(); i++)
@@ -66,17 +70,15 @@ namespace dae {
 				return true;
 		}
 
-		/*for (size_t i = 0; i < m_Triangles.size(); i++)
-		{
-			if (GeometryUtils::HitTest_Triangle(m_Triangles[i], ray))
-				return true;
-		}*/
-		for (size_t i = 0; i < m_TriangleMeshGeometries.size(); i++)
-		{
-			if (GeometryUtils::HitTest_TriangleMesh(m_TriangleMeshGeometries[i], ray))
-				return true;
-		}
 
+		if (GeometryUtils::SlabTest(m_aabbTriangles.min, m_aabbTriangles.max, ray))
+		{
+			for (size_t i = 0; i < m_TriangleMeshGeometries.size(); i++)
+			{
+				if (GeometryUtils::HitTest_TriangleMesh(m_TriangleMeshGeometries[i], ray))
+					return true;
+			}
+		}
 		return false;
 	}
 
@@ -275,26 +277,18 @@ namespace dae {
 		AddPlane(Vector3{ 5.f,0.f,0.f }, Vector3{ -1.f,0.f,0.f }, matLambert_GrayBlue); //RIGHT
 		AddPlane(Vector3{ -5.f,0.f,0.f }, Vector3{ 1.f,0.f,0.f }, matLambert_GrayBlue); //LEFT
 
-		/*auto triangle = Triangle{ {-.75f,.5f,.0f}, {-.75f,2.f,.0f},{.75f,.5f,0.f} };
-		triangle.cullMode = TriangleCullMode::FrontFaceCulling;
-		triangle.materialIndex = matLambert_White;
-
-		m_Triangles.emplace_back(triangle);*/
-
 		pMesh = AddTriangleMesh(dae::TriangleCullMode::BackFaceCulling, matLambert_White);
 		Utils::ParseOBJ("Resources/simple_cube.obj",pMesh->positions,pMesh->normals,pMesh->indices);
 
-		//pMesh->positions = { {-.75f, -1.f, .0f}, {-.75f,1.f,.0f}, {.75f, 1.f, 1.f}, {.75f, -1.f, 0.f} };
-		//pMesh->indices = {
-		//	0,1,2, //Triangle 1
-		//	0,2,3 // Triangle 2
-		//};
 
+
+		pMesh->shouldUseBVH = false;
 		pMesh->Scale({ .7f,.7f,.7f });
 		pMesh->Translate({ .0f,1.f,0.f });
+		//pMesh->CalculateNormals(); //calculated inside ParseOBJ
+		pMesh->CalculateCentroids();
 
-		//pMesh->CalculateNormals(); calculated inside ParseOBJ
-
+		pMesh->UpdateAABB(-1);
 		pMesh->UpdateTransforms();
 
 
@@ -306,9 +300,8 @@ namespace dae {
 	{
 		Scene::Update(pTimer);
 
-		pMesh->RotateY(PI_DIV_2 * pTimer->GetTotal());
-		pMesh->UpdateTransforms();
-
+		//pMesh->RotateY(PI_DIV_2 * pTimer->GetTotal());
+		//pMesh->UpdateTransforms();
 
 	}
 	
@@ -347,22 +340,39 @@ namespace dae {
 
 		m_pMeshes[0] = AddTriangleMesh(TriangleCullMode::BackFaceCulling, matLambert_White);
 		m_pMeshes[0]->AppendTriangle(baseTriangle, true);
+		m_pMeshes[0]->shouldUseBVH = false;
 		m_pMeshes[0]->Translate({ -1.75f, 4.5f, 0.0f });
-		
+		m_pMeshes[0]->CalculateCentroids();
+
+		m_pMeshes[0]->UpdateAABB(-1);
 		m_pMeshes[0]->UpdateTransforms();
+		/*m_pMeshes[0]->InitBVH();
+		m_pMeshes[0]->BuildBVH();*/
 
 		m_pMeshes[1] = AddTriangleMesh(TriangleCullMode::FrontFaceCulling, matLambert_White);
 		m_pMeshes[1]->AppendTriangle(baseTriangle, true);
+		m_pMeshes[1]->shouldUseBVH = false;
 		m_pMeshes[1]->Translate({ 0.0f, 4.5f, 0.0f });
+		m_pMeshes[1]->CalculateCentroids();
 		
+		m_pMeshes[1]->UpdateAABB(-1);
 		m_pMeshes[1]->UpdateTransforms();
+		/*m_pMeshes[1]->InitBVH();
+		m_pMeshes[1]->BuildBVH();*/
+
 
 		m_pMeshes[2] = AddTriangleMesh(TriangleCullMode::NoCulling, matLambert_White);
 		m_pMeshes[2]->AppendTriangle(baseTriangle, true);
+		m_pMeshes[2]->shouldUseBVH = false;
 		m_pMeshes[2]->Translate({ 1.75f, 4.5f, 0.0f });
+		m_pMeshes[2]->CalculateCentroids();
 		
+		m_pMeshes[2]->UpdateAABB(-1);
 		m_pMeshes[2]->UpdateTransforms();
+		/*m_pMeshes[2]->InitBVH();
+		m_pMeshes[2]->BuildBVH();*/
 
+		
 		//Light
 		AddPointLight(Vector3{ 0.0f, 5.0f, 5.0f }, 50.f, ColorRGB{ 1.0f, 0.61f, 0.45f }); // Backlight
 		AddPointLight(Vector3{ -2.5f, 5.0f, -5.0f }, 70.f, ColorRGB{ 1.0f, 0.8f, 0.45f }); // Frontlight left
@@ -377,7 +387,23 @@ namespace dae {
 		{
 			m->RotateY(yawAngle);
 			m->UpdateTransforms();
+			
+			for (uint32_t i = 0; i < m->trCount; i++)
+			{
+				m_aabbTriangles.Grow(m->transformedPositions[m->indices[i * 3]]);
+				m_aabbTriangles.Grow(m->transformedPositions[m->indices[i * 3 + 1]]);
+				m_aabbTriangles.Grow(m->transformedPositions[m->indices[i * 3 + 2]]);
+			}
+
 		}
+
+		for (const auto& s : m_SphereGeometries)
+		{
+			m_aabbCircles.Grow(Vector3{s.origin.x - s.radius, s.origin.y - s.radius,s.origin.z - s.radius});
+			m_aabbCircles.Grow(Vector3{ s.origin.x + s.radius, s.origin.y + s.radius,s.origin.z + s.radius });
+		}
+
+
 	}
 	
 	void Scene_W4_BunnyScene::Initialize()
@@ -399,12 +425,18 @@ namespace dae {
 
 		m_pBunny = AddTriangleMesh(dae::TriangleCullMode::BackFaceCulling, matLambert_White);
 		Utils::ParseOBJ("Resources/lowpoly_bunny.obj", m_pBunny->positions, m_pBunny->normals, m_pBunny->indices);
-		//m_pBunny->CalculateNormals();
-		m_pBunny->CalculateCentroids();
+		//m_pBunny->CalculateNormals();	
+		m_pBunny->shouldUseBVH = true;
 		m_pBunny->Scale({ 2.f,2.f,2.f });
+	
+		m_pBunny->CalculateCentroids();
 		
 		m_pBunny->UpdateTransforms();
+	
 		m_pBunny->InitBVH();
+		m_pBunny->BuildBVH();
+
+		
 
 		//Light
 		AddPointLight(Vector3{ 0.0f, 5.0f, 5.0f }, 50.f, ColorRGB{ 1.0f, 0.61f, 0.45f }); // Backlight
@@ -413,10 +445,11 @@ namespace dae {
 	}
 	void Scene_W4_BunnyScene::Update(Timer* pTimer)
 	{
-	/*	Scene::Update(pTimer);
+		Scene::Update(pTimer);
 
 		const auto yawAngle = (cosf(pTimer->GetTotal()) + 1.f) / 2.f * PI_2;
 		m_pBunny->RotateY(yawAngle);
-		m_pBunny->UpdateTransforms();*/
+		m_pBunny->UpdateTransforms();
+
 	}
 }

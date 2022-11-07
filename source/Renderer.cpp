@@ -107,7 +107,7 @@ void Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, float 
 	rayDir = camera.cameraToWorld.TransformVector(rayDir);
 	rayDir.Normalize();
 
-	Ray viewRay{ camera.origin,rayDir };
+	Ray viewRay{ camera.origin,rayDir,{1.f/rayDir.x, 1.f / rayDir.y, 1.f / rayDir.z} };
 
 	finalColor = dae::colors::Black;
 
@@ -125,6 +125,7 @@ void Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, float 
 			lightRay.direction = dirToLight.Normalized();
 			lightRay.min = offset;
 			lightRay.max = dirToLight.Magnitude();
+			lightRay.reciprocalDir = { 1.f / lightRay.direction.x,1.f / lightRay.direction.y,1.f / lightRay.direction.z };
 
 			float lambertCosine{ Vector3::Dot(closestHit.normal, lightRay.direction) };
 			bool skipCalculations{ false };

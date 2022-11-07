@@ -5,6 +5,7 @@
 #include "DataTypes.h"
 
 
+
 namespace dae
 {
 	namespace GeometryUtils
@@ -105,59 +106,77 @@ namespace dae
 		//TRIANGLE HIT-TESTS
 		inline bool HitTest_Triangle(const Triangle& triangle, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{	
-			Vector3 v0{ triangle.v0 }, v1{ triangle.v1 }, v2{ triangle.v2 };
-			Vector3 trNormal{ triangle.normal };
-			Vector3 rayOrigin{ ray.origin };
-			Vector3 rayDir{ ray.direction };
-			Vector3 L{ (v0 + v1 + v2) / 3 - rayOrigin };
+			Vector3 v0 = triangle.v0;
+			Vector3 v1 = triangle.v1;
+			Vector3 v2 = triangle.v2;
 
-			float t{ Vector3::Dot(L,trNormal) / Vector3::Dot(rayDir,trNormal) };
+			Vector3 edge1, edge2, p, s, q;
+			float determinant, invA, u, v;
 
-			if (t > hitRecord.t)
+			edge1 = v1 - v0;
+			edge2 = v2 - v0;
+
+			p = Vector3::Cross(ray.direction, edge2);
+			determinant = Vector3::Dot(p, edge1);
+
+			switch (triangle.cullMode)
+			{
+			case TriangleCullMode::FrontFaceCulling:
+				if (ignoreHitRecord)
+				{
+					if (determinant < FLT_EPSILON)
+						return false;
+				}
+				else if (determinant > FLT_EPSILON)
+					return false;
+				
+				break;
+			case TriangleCullMode::BackFaceCulling:
+				if (ignoreHitRecord)
+				{
+					if (determinant > FLT_EPSILON)
+						return false;
+				}
+				else if (determinant < FLT_EPSILON)
+					return false;
+				break;
+			default:
+				if (determinant > -FLT_EPSILON && determinant < FLT_EPSILON) //ray parallel to triangle
+					return false;
+				break;
+			}
+
+			invA = 1.0f / determinant;
+			s = ray.origin - v0;
+			u = invA * Vector3::Dot(s, p);
+
+			if (u < 0.0f || u > 1.f)
 				return false;
+
+			q = Vector3::Cross(s, edge1);
+			v = invA * Vector3::Dot(ray.direction, q);
+
+			if (v < 0.0f || u + v >1.0f)
+				return false;
+
+			float t = invA * Vector3::Dot(edge2, q);
 
 			if (t < ray.min || t > ray.max)
 				return false;
-			
 
-			Vector3 P{ rayOrigin + t * ray.direction };
-			
-			if (Vector3::Dot(trNormal, Vector3::Cross(v1 - v0, P - v0)) < 0)
-				return false;
-			if (Vector3::Dot(trNormal, Vector3::Cross(v2 - v1, P - v1)) < 0)
-				return false;
-			if (Vector3::Dot(trNormal, Vector3::Cross(v0 - v2, P - v2)) < 0)
-				return false;
-			
-			TriangleCullMode cullMode{triangle.cullMode};
 			if (ignoreHitRecord)
+				return true;
+
+			if (t < hitRecord.t)
 			{
-				if (triangle.cullMode == TriangleCullMode::FrontFaceCulling)
-				{
-					cullMode = TriangleCullMode::BackFaceCulling;
-				}
-				else if (triangle.cullMode == TriangleCullMode::BackFaceCulling)
-				{
-					cullMode = TriangleCullMode::FrontFaceCulling;
-				}
+				hitRecord.t = t;
+				hitRecord.materialIndex = triangle.materialIndex;
+				hitRecord.origin = ray.origin + ray.direction * hitRecord.t;
+				hitRecord.didHit = true;
+				hitRecord.normal = triangle.normal;
 			}
 
-			if (cullMode == TriangleCullMode::BackFaceCulling)
-				if (Vector3::Dot(trNormal, rayDir) > 0)
-					return false;
-
-			if (cullMode == TriangleCullMode::FrontFaceCulling)
-				if (Vector3::Dot(trNormal, rayDir) < 0)
-					return false;
-
-			hitRecord.t = t;
-			hitRecord.didHit = true;
-			hitRecord.materialIndex = triangle.materialIndex;
-			hitRecord.origin = P;
-			hitRecord.normal = trNormal;
-			hitRecord.normal.Normalize();
 			return true;
-
 		}
 
 		inline bool HitTest_Triangle(const Triangle& triangle, const Ray& ray)
@@ -167,22 +186,22 @@ namespace dae
 		}
 #pragma endregion
 #pragma region SlabTest
-		inline bool SlabTest_TriangleMesh(const Vector3& minAABB,const Vector3& maxAABB, const Ray& ray)
+		inline bool SlabTest(const Vector3& minAABB,const Vector3& maxAABB, const Ray& ray)
 		{
-			float tx1 = (minAABB.x - ray.origin.x) / ray.direction.x;
-			float tx2 = (maxAABB.x - ray.origin.x) / ray.direction.x;
+			float tx1 = (minAABB.x - ray.origin.x) * ray.reciprocalDir.x;
+			float tx2 = (maxAABB.x - ray.origin.x) * ray.reciprocalDir.x;
 
 			float tmin = std::min(tx1, tx2);
 			float tmax = std::max(tx1, tx2);
 
-			float ty1 = (minAABB.y - ray.origin.y) / ray.direction.y;
-			float ty2 = (maxAABB.y - ray.origin.y) / ray.direction.y;
+			float ty1 = (minAABB.y - ray.origin.y) * ray.reciprocalDir.y;
+			float ty2 = (maxAABB.y - ray.origin.y) * ray.reciprocalDir.y;
 
 			tmin = std::max(tmin, std::min(ty1, ty2));
 			tmax = std::min(tmax, std::max(ty1, ty2));
 
-			float tz1 = (minAABB.z - ray.origin.z) / ray.direction.z;
-			float tz2 = (maxAABB.z - ray.origin.z) / ray.direction.z;
+			float tz1 = (minAABB.z - ray.origin.z) * ray.reciprocalDir.z;
+			float tz2 = (maxAABB.z - ray.origin.z) * ray.reciprocalDir.z;
 
 			tmin = std::max(tmin, std::min(tz1, tz2));
 			tmax = std::min(tmax, std::max(tz1, tz2));
@@ -194,7 +213,7 @@ namespace dae
 		{
 			const BVHNode& node = mesh.bvhNodes[nodeIdx];
 
-			if (!SlabTest_TriangleMesh(node.minAABB, node.maxAABB, ray))
+			if (!SlabTest(node.minAABB, node.maxAABB, ray))
 				return;
 
 			if (node.nrPrimitives !=0) //Leaf
@@ -204,52 +223,61 @@ namespace dae
 			}
 			else
 			{
-				IntersectBVH(ray, mesh, node.leftChild, indexes);
-				IntersectBVH(ray, mesh, node.leftChild + 1, indexes);
+				IntersectBVH(ray, mesh, node.leftFirst, indexes);
+				IntersectBVH(ray, mesh, node.leftFirst + 1, indexes);
 			}
 		}
 #pragma endregion
 #pragma region TriangeMesh HitTest
 		inline bool HitTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
-			std::vector<int> indexes{};
-			IntersectBVH(ray, mesh, mesh.rootNodeIdx, indexes);
-
-			if (indexes.size() ==0)
-				return hitRecord.didHit;
 
 			Triangle triangle{};
 			triangle.cullMode = mesh.cullMode;
-			if (ignoreHitRecord)
+			triangle.materialIndex = mesh.materialIndex;
+			int nrVertices{ 3 };	
+
+			if (mesh.shouldUseBVH)
 			{
-				if (triangle.cullMode == TriangleCullMode::FrontFaceCulling)
+				std::vector<int> indexes{};
+				IntersectBVH(ray, mesh, mesh.rootNodeIdx, indexes);
+
+				if (indexes.empty())
+					return hitRecord.didHit;
+
+
+				for (size_t i = 0; i < indexes.size(); i++)
 				{
-					triangle.cullMode = TriangleCullMode::BackFaceCulling;
-				}
-				else if (triangle.cullMode == TriangleCullMode::BackFaceCulling)
-				{
-					triangle.cullMode = TriangleCullMode::FrontFaceCulling;
+
+					uint32_t start = mesh.bvhNodes[indexes[i]].leftFirst;
+					uint32_t end = start + mesh.bvhNodes[indexes[i]].nrPrimitives;
+
+					for (uint32_t currentTriangle = start; currentTriangle < end; ++currentTriangle)
+					{
+						triangle.v0 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices]];
+						triangle.v1 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 1]];
+						triangle.v2 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 2]];
+						triangle.normal = mesh.transformedNormals[currentTriangle];
+						if (HitTest_Triangle(triangle, ray, hitRecord) && ignoreHitRecord)
+							return true;
+					}
 				}
 			}
-
-			for (size_t i = 0; i < indexes.size(); i++)
+			else
 			{
-				triangle.materialIndex = mesh.materialIndex;
-				int nrVertices{ 3 };
-				uint32_t start = mesh.bvhNodes[indexes[i]].firstPrimitiveIdx;
-				uint32_t end = start + mesh.bvhNodes[indexes[i]].nrPrimitives;
+				if (!SlabTest(mesh.transformedMinAABB, mesh.transformedMaxAABB, ray))
+					return false;
 
-				for (uint32_t currentTriangle = start; currentTriangle < end; ++currentTriangle)
-				{					
+				for (uint32_t currentTriangle = 0; currentTriangle < mesh.indices.size() / 3; ++currentTriangle)
+				{
 					triangle.v0 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices]];
 					triangle.v1 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 1]];
 					triangle.v2 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 2]];
 					triangle.normal = mesh.transformedNormals[currentTriangle];
-
-					HitTest_Triangle(triangle, ray, hitRecord);
+					if (HitTest_Triangle(triangle, ray, hitRecord) && ignoreHitRecord)
+						return true;
 				}
 			}
-
 			return hitRecord.didHit;
 		}
 
