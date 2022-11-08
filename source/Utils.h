@@ -274,7 +274,7 @@ namespace dae
 					triangle.v1 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 1]];
 					triangle.v2 = mesh.transformedPositions[mesh.indices[currentTriangle * nrVertices + 2]];
 					triangle.normal = mesh.transformedNormals[currentTriangle];
-					if (HitTest_Triangle(triangle, ray, hitRecord) && ignoreHitRecord)
+					if (HitTest_Triangle(triangle, ray, hitRecord,ignoreHitRecord) && ignoreHitRecord)
 						return true;
 				}
 			}
