@@ -175,4 +175,5 @@ namespace dae
 	private:
 		TriangleMesh* m_pBunny{nullptr};
 	};
+
 }
